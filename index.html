@@ -189,16 +189,26 @@
       <span class="panel-hint">让视觉模型读这些帧</span>
     </div>
 
+    <div class="provider-row">
+      <label for="providerSel">模型平台</label>
+      <select id="providerSel">
+        <option value="zhipu">智谱 GLM-4V-Flash（免费）</option>
+        <option value="deepseek">DeepSeek V4.1 Flash（能看图，便宜）</option>
+        <option value="siliconflow">硅基流动（注册送额度）</option>
+        <option value="custom">自定义</option>
+      </select>
+    </div>
+
     <div class="key-block">
       <div class="key-head">
-        <label for="apiKey">智谱 API Key</label>
-        <a class="key-link" href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener">去获取</a>
+        <label for="apiKey">API Key</label>
+        <a class="key-link" id="keyLink" href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener">去获取</a>
       </div>
       <div class="key-input-row">
         <input type="password" id="apiKey" placeholder="粘贴 Key，只保存在你的浏览器" autocomplete="off" spellcheck="false">
         <button class="ghost-btn" id="keyToggle">显示</button>
       </div>
-      <p class="key-tip">GLM-4V-Flash 免费。Key 存在本机 localStorage，不会上传到任何服务器。</p>
+      <p class="key-tip" id="keyTip">GLM-4V-Flash 免费。Key 存在本机 localStorage，不会上传到任何服务器。</p>
     </div>
 
     <details class="adv">
