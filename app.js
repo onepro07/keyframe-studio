@@ -144,6 +144,7 @@
     $('panelParams').hidden = true;
     $('panelProgress').hidden = true;
     $('panelResult').hidden = true;
+    $('panelSummary').hidden = true;
   }
 
   async function acceptFile(file) {
@@ -484,6 +485,7 @@
 
       setProgress(100, '完成', '共 ' + result.frames.length + ' 帧');
       $('panelResult').hidden = false;
+      $('panelSummary').hidden = false;
       $('panelResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       setTimeout(() => { $('panelProgress').hidden = true; }, 900);
@@ -848,6 +850,356 @@
         downloadBlob(f.blob, name);
       }, i * 220);
     });
+  });
+
+  /* ================= 内容总结 ================= */
+
+  const KEY_STORE = 'kf-api-key';
+  const sum = { controller: null, running: false, text: '', meta: '' };
+
+  const apiKeyEl = $('apiKey');
+  const apiEndpointEl = $('apiEndpoint');
+  const apiModelEl = $('apiModel');
+  const apiFramesEl = $('apiFrames');
+  const summarizeBtn = $('summarizeBtn');
+  const stopBtn = $('stopBtn');
+  const summaryStatus = $('summaryStatus');
+  const summaryOutput = $('summaryOutput');
+  const summaryText = $('summaryText');
+
+  // 回填本地保存的 Key
+  try {
+    const saved = localStorage.getItem(KEY_STORE);
+    if (saved) apiKeyEl.value = saved;
+  } catch (e) { /* 隐私模式下可能不可用 */ }
+
+  apiKeyEl.addEventListener('change', () => {
+    try {
+      const v = apiKeyEl.value.trim();
+      if (v) localStorage.setItem(KEY_STORE, v);
+      else localStorage.removeItem(KEY_STORE);
+    } catch (e) {}
+  });
+
+  $('keyToggle').addEventListener('click', () => {
+    const isPwd = apiKeyEl.type === 'password';
+    apiKeyEl.type = isPwd ? 'text' : 'password';
+    $('keyToggle').textContent = isPwd ? '隐藏' : '显示';
+  });
+
+  function setStatus(msg, tone) {
+    summaryStatus.textContent = msg;
+    if (tone) summaryStatus.dataset.tone = tone;
+    else delete summaryStatus.dataset.tone;
+  }
+
+  /* ---------- 取帧并压缩 ---------- */
+
+  async function pickFramesForApi(maxN) {
+    const frames = state.frames;
+    if (!frames.length) return [];
+
+    let picked = frames;
+    if (frames.length > maxN) {
+      const step = frames.length / maxN;
+      picked = Array.from({ length: maxN }, (_, k) => frames[Math.floor(k * step)]);
+    }
+
+    const out = [];
+    for (const f of picked) {
+      try {
+        const img = await loadImage(f.url);
+        const nw = img.naturalWidth || img.width;
+        const nh = img.naturalHeight || img.height;
+        const w = Math.min(800, nw);
+        const h = Math.round(w * (nh / nw));
+        const c = makeCanvas(w, h);
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        out.push({ time: f.time, dataUrl: c.toDataURL('image/jpeg', 0.72) });
+      } catch (e) {
+        log('[警告] 一帧压缩失败：' + e.message);
+      }
+    }
+    return out;
+  }
+
+  /* ---------- 提示词 ---------- */
+
+  function buildPrompt(frames) {
+    const times = frames.map((f, i) => `第 ${i + 1} 帧 = ${fmtTime(f.time)}`).join('；');
+    return [
+      '你在分析一段视频的关键帧截图。这些帧是按时间顺序从视频里抽取的，代表了画面发生明显变化的时刻。',
+      '',
+      `共 ${frames.length} 帧，时间对应：${times}。`,
+      '',
+      '请按下面的结构输出：',
+      '',
+      '## 一句话总览',
+      '用一句话说清这段视频在讲什么。',
+      '',
+      '## 时间线',
+      '按时间顺序，每一帧写一小段，格式为「[时间点] 画面内容 — 这段在讲什么」。',
+      '画面内容要写：出现了什么主体、有哪些可见的文字或数字、图表的大致结构。',
+      '',
+      '## 结构与逻辑',
+      '整体是如何展开的：先讲什么、再怎么推进、有没有对比或递进。',
+      '',
+      '## 关键信息',
+      '画面里出现的具体数据、结论、名词、步骤，逐条列出。没有就写「无可辨识的数据」。',
+      '',
+      '## 画面之外',
+      '哪些内容很可能只存在于口播里、光看画面判断不了。这一节用来提醒我哪里需要回看。',
+      '',
+      '要求：',
+      '1. 只描述你确实看到的，不要推测和编造。',
+      '2. 文字看不清就直说「文字模糊无法辨认」，不要猜。',
+      '3. 不要复述这些指令，直接给结论。',
+    ].join('\n');
+  }
+
+  /* ---------- 调用模型（流式） ---------- */
+
+  async function callVision(frames, opt) {
+    const content = [{ type: 'text', text: buildPrompt(frames) }];
+    frames.forEach((f, i) => {
+      content.push({ type: 'text', text: `第 ${i + 1} 帧（${fmtTime(f.time)}）：` });
+      content.push({ type: 'image_url', image_url: { url: f.dataUrl } });
+    });
+
+    const body = {
+      model: opt.model,
+      stream: true,
+      temperature: 0.3,
+      messages: [{ role: 'user', content }],
+    };
+
+    const resp = await fetch(opt.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + opt.key,
+      },
+      body: JSON.stringify(body),
+      signal: sum.controller.signal,
+    });
+
+    if (!resp.ok) {
+      let detail = '';
+      try { detail = (await resp.text()).slice(0, 300); } catch (e) {}
+      const hint = {
+        401: 'Key 无效或已过期',
+        403: '没有权限，检查 Key 或模型是否开通',
+        429: '请求太频繁或额度用尽，稍后再试',
+        404: '接口地址或模型名不对',
+      }[resp.status] || '';
+      throw new Error(`HTTP ${resp.status}${hint ? '　' + hint : ''}${detail ? '\n' + detail : ''}`);
+    }
+
+    // 没有流式响应体时退化为整体读取
+    if (!resp.body || !resp.body.getReader) {
+      const data = await resp.json();
+      return (data.choices && data.choices[0] && data.choices[0].message &&
+              data.choices[0].message.content) || '';
+    }
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder('utf-8');
+    let buf = '';
+    let full = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line || !line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const j = JSON.parse(payload);
+          const d = j.choices && j.choices[0] &&
+                    (j.choices[0].delta || j.choices[0].message);
+          const piece = d && d.content;
+          if (piece) { full += piece; onChunk(piece); }
+        } catch (e) { /* 不完整的分片，跳过 */ }
+      }
+    }
+    return full;
+  }
+
+  /* ---------- 渲染 ---------- */
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // 极简排版：## 标题加粗，- 开头做项目符号，**文字**加粗
+  function renderSummary(text) {
+    const lines = escapeHtml(text).split('\n');
+    let out = '';
+    lines.forEach((line) => {
+      const t = line.trimEnd();
+      if (/^#{1,6}\s+/.test(t)) {
+        // 块级元素自带换行，不再补 \n，避免行距被撑开
+        out += '<span class="h">' + t.replace(/^#{1,6}\s+/, '') + '</span>';
+      } else if (/^[-*]\s+/.test(t)) {
+        out += '<span class="bullet">' + t.replace(/^[-*]\s+/, '') + '</span>';
+      } else {
+        out += t + '\n';
+      }
+    });
+    return out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  }
+
+  let onChunk = () => {};
+
+  function resetSummaryOutput() {
+    sum.text = '';
+    summaryText.innerHTML = '';
+    summaryOutput.hidden = false;
+  }
+
+  /* ---------- 生成总结 ---------- */
+
+  summarizeBtn.addEventListener('click', async () => {
+    if (sum.running) return;
+
+    const key = apiKeyEl.value.trim();
+    const endpoint = apiEndpointEl.value.trim();
+    const model = apiModelEl.value.trim();
+    const maxN = Math.max(2, Math.min(16, parseInt(apiFramesEl.value, 10) || 8));
+
+    if (!state.frames.length) { setStatus('还没有帧，先拆一遍视频。', 'error'); return; }
+    if (!key) { setStatus('先填 API Key。没有的话可以点「复制提示词」，交给任意 AI。', 'error'); apiKeyEl.focus(); return; }
+    if (!endpoint || !model) { setStatus('接口地址和模型名不能为空。', 'error'); return; }
+
+    sum.running = true;
+    sum.controller = new AbortController();
+    summarizeBtn.disabled = true;
+    stopBtn.hidden = false;
+    resetSummaryOutput();
+    summaryMeta.textContent = '准备中…';
+
+    try {
+      setStatus('正在压缩画面…');
+      const frames = await pickFramesForApi(maxN);
+      if (!frames.length) throw new Error('没有可用的帧');
+
+      setStatus(`已选 ${frames.length} 帧，正在请求模型…`);
+      summaryMeta.textContent = `${frames.length} 帧 · ${model}`;
+
+      let count = 0;
+      onChunk = (piece) => {
+        count += piece.length;
+        summaryText.innerHTML = renderSummary(sum.text);
+        summaryText.scrollTop = summaryText.scrollHeight;
+        if (count % 40 < piece.length) {
+          summaryMeta.textContent = `${frames.length} 帧 · 已生成 ${count} 字`;
+        }
+      };
+
+      const t0 = Date.now();
+      sum.text = await callVision(frames, { key, endpoint, model });
+      summaryText.innerHTML = renderSummary(sum.text);
+
+      const secs = ((Date.now() - t0) / 1000).toFixed(1);
+      summaryMeta.textContent = `${frames.length} 帧 · ${sum.text.length} 字 · ${secs}s`;
+      setStatus('完成。可以复制或存成 .md。', 'ok');
+    } catch (err) {
+      const aborted = err && err.name === 'AbortError';
+      if (aborted) {
+        setStatus('已停止。已生成的部分保留在上面。', 'error');
+      } else {
+        const msg = (err && err.message) || String(err);
+        let extra = '';
+        if (/Failed to fetch|NetworkError|load failed/i.test(msg)) {
+          extra = '　（可能是网络不通，或该接口不允许浏览器直接调用。可改用「复制提示词」）';
+        }
+        setStatus('出错了：' + msg + extra, 'error');
+        log('[错误] 总结失败：' + msg);
+      }
+    } finally {
+      sum.running = false;
+      onChunk = () => {};
+      summarizeBtn.disabled = false;
+      stopBtn.hidden = true;
+    }
+  });
+
+  stopBtn.addEventListener('click', () => {
+    if (sum.controller) sum.controller.abort();
+  });
+
+  /* ---------- 复制 / 保存 ---------- */
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e2) {}
+      ta.remove();
+      return ok;
+    }
+  }
+
+  $('copySummaryBtn').addEventListener('click', async () => {
+    if (!sum.text) return;
+    const ok = await copyText(sum.text);
+    setStatus(ok ? '总结已复制。' : '复制失败，请手动选中。', ok ? 'ok' : 'error');
+  });
+
+  $('saveSummaryBtn').addEventListener('click', () => {
+    if (!sum.text) return;
+    const name = (state.file ? state.file.name.replace(/\.[^.]+$/, '') : '视频') + '_画面总结.md';
+    const head = `# 画面总结\n\n源文件：${state.file ? state.file.name : '未知'}\n帧数：${state.frames.length}\n生成时间：${new Date().toLocaleString()}\n\n---\n\n`;
+    downloadBlob(new Blob([head + sum.text], { type: 'text/markdown;charset=utf-8' }), name);
+  });
+
+  /* ---------- 无 Key 的兜底：导出提示词与图片 ---------- */
+
+  $('promptBtn').addEventListener('click', async () => {
+    if (!state.frames.length) { setStatus('还没有帧。', 'error'); return; }
+    const maxN = Math.max(2, Math.min(16, parseInt(apiFramesEl.value, 10) || 8));
+    setStatus('正在整理提示词…');
+
+    const frames = await pickFramesForApi(maxN);
+    const list = frames.map((f, i) => `第 ${i + 1} 帧（${fmtTime(f.time)}）`).join('\n');
+    const text = buildPrompt(frames) +
+      '\n\n---\n\n（请把上面列出的 ' + frames.length + ' 张截图按顺序一起发给我）\n\n截图清单：\n' + list;
+
+    const ok = await copyText(text);
+    setStatus(ok
+      ? `提示词已复制。把「下载总结用图」得到的 ${frames.length} 张图一起发给任意 AI 即可。`
+      : '复制失败，请手动选中。', ok ? 'ok' : 'error');
+  });
+
+  $('summaryImgsBtn').addEventListener('click', async () => {
+    if (!state.frames.length) { setStatus('还没有帧。', 'error'); return; }
+    const maxN = Math.max(2, Math.min(16, parseInt(apiFramesEl.value, 10) || 8));
+    setStatus('正在导出图片…');
+    const frames = await pickFramesForApi(maxN);
+    frames.forEach((f, i) => {
+      setTimeout(() => {
+        const bin = atob(f.dataUrl.split(',')[1]);
+        const arr = new Uint8Array(bin.length);
+        for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+        const name = `总结图_${String(i + 1).padStart(2, '0')}_${fmtFileStamp(f.time)}.jpg`;
+        downloadBlob(new Blob([arr], { type: 'image/jpeg' }), name);
+      }, i * 260);
+    });
+    setStatus(`已导出 ${frames.length} 张（按时间编号）。`, 'ok');
   });
 
 })();
