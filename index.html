@@ -202,11 +202,13 @@
     <div class="key-block">
       <div class="key-head">
         <label for="apiKey">API Key</label>
+        <span class="key-state" id="keyState" hidden>已保存在本机</span>
         <a class="key-link" id="keyLink" href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener">去获取</a>
       </div>
       <div class="key-input-row">
-        <input type="password" id="apiKey" placeholder="粘贴 Key，只保存在你的浏览器" autocomplete="off" spellcheck="false">
+        <input type="password" id="apiKey" placeholder="粘贴一次，之后自动记住" autocomplete="off" spellcheck="false">
         <button class="ghost-btn" id="keyToggle">显示</button>
+        <button class="ghost-btn" id="keyClear" hidden>清除</button>
       </div>
       <p class="key-tip" id="keyTip">GLM-4V-Flash 免费。Key 存在本机 localStorage，不会上传到任何服务器。</p>
     </div>
