@@ -862,9 +862,9 @@
   const PROVIDERS = {
     zhipu: {
       endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-      model: 'glm-4v-flash',
+      model: 'glm-4.6v-flash',
       link: 'https://open.bigmodel.cn/usercenter/apikeys',
-      tip: 'GLM-4V-Flash 免费。Key 存在本机 localStorage，不会上传到任何服务器。',
+      tip: 'GLM-4.6V-Flash 免费（128K 上下文，输入输出缓存全免费）。手机号注册即可。',
     },
     deepseek: {
       endpoint: 'https://api.deepseek.com/chat/completions',
@@ -1079,10 +1079,11 @@
       let detail = '';
       try { detail = (await resp.text()).slice(0, 300); } catch (e) {}
       const hint = {
+        400: '请求被拒，常见原因是模型不支持图片输入或参数不对',
         401: 'Key 无效或已过期',
-        403: '没有权限，检查 Key 或模型是否开通',
+        403: '没有权限，检查 Key 或该模型是否已开通',
+        404: '模型名不存在。去控制台确认当前的免费视觉模型（智谱现为 glm-4.6v-flash）',
         429: '请求太频繁或额度用尽，稍后再试',
-        404: '接口地址或模型名不对',
       }[resp.status] || '';
       throw new Error(`HTTP ${resp.status}${hint ? '　' + hint : ''}${detail ? '\n' + detail : ''}`);
     }
