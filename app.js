@@ -929,18 +929,48 @@
     }
   } catch (e) {}
 
-  // 回填本地保存的 Key
-  try {
-    const saved = localStorage.getItem(KEY_STORE);
-    if (saved) apiKeyEl.value = saved;
-  } catch (e) { /* 隐私模式下可能不可用 */ }
+  // 回填本地保存的 Key，并给出「已保存」提示
+  const keyState = $('keyState');
+  const keyClear = $('keyClear');
 
-  apiKeyEl.addEventListener('change', () => {
+  function reflectKeyState(saved) {
+    keyState.hidden = !saved;
+    keyClear.hidden = !saved;
+  }
+
+  function persistKey() {
     try {
       const v = apiKeyEl.value.trim();
       if (v) localStorage.setItem(KEY_STORE, v);
       else localStorage.removeItem(KEY_STORE);
-    } catch (e) {}
+      reflectKeyState(!!v);
+    } catch (e) { /* 隐私模式或存储被禁用 */ }
+  }
+
+  try {
+    const saved = localStorage.getItem(KEY_STORE);
+    if (saved) {
+      apiKeyEl.value = saved;
+      reflectKeyState(true);
+    }
+  } catch (e) {}
+
+  // 边输边存：不依赖失焦，粘完就算存好
+  let keyTimer = null;
+  apiKeyEl.addEventListener('input', () => {
+    clearTimeout(keyTimer);
+    keyTimer = setTimeout(persistKey, 350);
+  });
+  apiKeyEl.addEventListener('change', persistKey);
+
+  keyClear.addEventListener('click', () => {
+    apiKeyEl.value = '';
+    apiKeyEl.type = 'password';
+    $('keyToggle').textContent = '显示';
+    try { localStorage.removeItem(KEY_STORE); } catch (e) {}
+    reflectKeyState(false);
+    setStatus('已清除本机保存的 Key，下次需要重新填写。');
+    apiKeyEl.focus();
   });
 
   $('keyToggle').addEventListener('click', () => {
