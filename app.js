@@ -855,8 +855,38 @@
   /* ================= 内容总结 ================= */
 
   const KEY_STORE = 'kf-api-key';
+  const PROVIDER_STORE = 'kf-provider';
   const sum = { controller: null, running: false, text: '', meta: '' };
 
+  // 平台预设：只列「能看图」的模型
+  const PROVIDERS = {
+    zhipu: {
+      endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+      model: 'glm-4v-flash',
+      link: 'https://open.bigmodel.cn/usercenter/apikeys',
+      tip: 'GLM-4V-Flash 免费。Key 存在本机 localStorage，不会上传到任何服务器。',
+    },
+    deepseek: {
+      endpoint: 'https://api.deepseek.com/chat/completions',
+      model: 'deepseek-flash',
+      link: 'https://platform.deepseek.com/api_keys',
+      tip: 'DeepSeek 的 deepseek-flash（V4.1-Flash）支持图像理解。注意：V4 Pro 不支持看图，别选错。',
+    },
+    siliconflow: {
+      endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+      model: 'Qwen/Qwen2.5-VL-7B-Instruct',
+      link: 'https://cloud.siliconflow.cn/me/account/ak',
+      tip: '硅基流动注册送额度，模型名请在控制台确认当前可用的视觉模型。',
+    },
+    custom: {
+      endpoint: '',
+      model: '',
+      link: '',
+      tip: '填任意 OpenAI 兼容接口。注意：模型必须支持图像输入，否则读不了帧。',
+    },
+  };
+
+  const providerSel = $('providerSel');
   const apiKeyEl = $('apiKey');
   const apiEndpointEl = $('apiEndpoint');
   const apiModelEl = $('apiModel');
@@ -866,6 +896,38 @@
   const summaryStatus = $('summaryStatus');
   const summaryOutput = $('summaryOutput');
   const summaryText = $('summaryText');
+
+  function applyProvider(name, keepFields) {
+    const p = PROVIDERS[name];
+    if (!p) return;
+    if (!keepFields) {
+      if (p.endpoint) apiEndpointEl.value = p.endpoint;
+      if (p.model) apiModelEl.value = p.model;
+    }
+    $('keyTip').textContent = p.tip;
+    const link = $('keyLink');
+    if (p.link) {
+      link.href = p.link;
+      link.textContent = '去获取';
+      link.style.display = '';
+    } else {
+      link.style.display = 'none';
+    }
+  }
+
+  providerSel.addEventListener('change', () => {
+    applyProvider(providerSel.value);
+    try { localStorage.setItem(PROVIDER_STORE, providerSel.value); } catch (e) {}
+  });
+
+  // 恢复上次选的平台
+  try {
+    const savedProvider = localStorage.getItem(PROVIDER_STORE);
+    if (savedProvider && PROVIDERS[savedProvider]) {
+      providerSel.value = savedProvider;
+      applyProvider(savedProvider);
+    }
+  } catch (e) {}
 
   // 回填本地保存的 Key
   try {
@@ -1076,6 +1138,12 @@
     if (!state.frames.length) { setStatus('还没有帧，先拆一遍视频。', 'error'); return; }
     if (!key) { setStatus('先填 API Key。没有的话可以点「复制提示词」，交给任意 AI。', 'error'); apiKeyEl.focus(); return; }
     if (!endpoint || !model) { setStatus('接口地址和模型名不能为空。', 'error'); return; }
+
+    // DeepSeek V4 Pro 官方标注「图像理解：不支持」，选了也读不了帧
+    if (/v4[\s._-]?pro/i.test(model)) {
+      setStatus('DeepSeek V4 Pro 不支持图像输入（官方定价页明确标注），换 deepseek-flash 才能读帧。', 'error');
+      return;
+    }
 
     sum.running = true;
     sum.controller = new AbortController();
