@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>关键帧工坊 · 视频画面总结</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="brand-name">关键帧工坊</span>
+  </div>
+  <div class="topbar-right">
+    <span class="engine-dot" id="engineDot" data-state="idle"></span>
+    <span class="engine-text" id="engineText">检测中</span>
+    <button class="icon-btn" id="themeBtn" title="切换主题" aria-label="切换主题">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+        <circle cx="8" cy="8" r="3.2"/>
+        <path d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1M12.9 12.9l-1.1-1.1M4.2 4.2L3.1 3.1"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="shell">
+
+  <section class="hero">
+    <h1>把视频拆成<br>能被读懂的画面</h1>
+    <p class="lede">场景检测挑出画面真正变化的瞬间，感知哈希去掉重复，黑屏直接丢弃。<br>剩下的每一帧，都值得看。</p>
+  </section>
+
+  <!-- 1 投放 -->
+  <section class="panel" id="panelInput">
+    <div class="panel-head">
+      <span class="step-no">01</span>
+      <h2>投放视频</h2>
+      <span class="panel-hint">文件不会离开你的浏览器</span>
+    </div>
+
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择或拖入视频文件">
+      <svg class="dz-icon" width="34" height="34" viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.3">
+        <rect x="3.5" y="7" width="27" height="20" rx="3"/>
+        <path d="M17 21V12.5M17 12.5l-3.6 3.6M17 12.5l3.6 3.6"/>
+      </svg>
+      <p class="dz-title">拖入视频，或点击选择</p>
+      <p class="dz-sub">mp4 / mov / mkv / webm　建议 500MB 以内</p>
+      <input type="file" id="fileInput" accept="video/*" hidden>
+    </div>
+
+    <div class="file-card" id="fileCard" hidden>
+      <div class="file-thumb" id="fileThumb"></div>
+      <div class="file-meta">
+        <p class="file-name" id="fileName">—</p>
+        <p class="file-sub" id="fileSub">—</p>
+      </div>
+      <button class="ghost-btn" id="clearBtn">换一个</button>
+    </div>
+  </section>
+
+  <!-- 2 参数 -->
+  <section class="panel" id="panelParams" hidden>
+    <div class="panel-head">
+      <span class="step-no">02</span>
+      <h2>调节抽取强度</h2>
+      <span class="panel-hint">右边实时看效果</span>
+    </div>
+
+    <div class="params-grid">
+      <div class="controls">
+
+        <div class="ctrl">
+          <div class="ctrl-head">
+            <label for="sceneRange">场景灵敏度</label>
+            <output id="sceneOut">0.30</output>
+          </div>
+          <input type="range" id="sceneRange" min="0.05" max="0.6" step="0.05" value="0.3">
+          <div class="ctrl-scale"><span>捕捉细微变化</span><span>只留剧烈变化</span></div>
+          <p class="ctrl-tip" id="sceneTip">适合讲解、PPT 类视频</p>
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-head">
+            <label for="maxRange">最多保留</label>
+            <output id="maxOut">60 帧</output>
+          </div>
+          <input type="range" id="maxRange" min="10" max="200" step="10" value="60">
+          <div class="ctrl-scale"><span>10</span><span>200</span></div>
+        </div>
+
+        <label class="switch-row">
+          <input type="checkbox" id="dedupeToggle" checked>
+          <span class="switch-track"><span class="switch-knob"></span></span>
+          <span class="switch-label">去重（丢弃近似重复帧）</span>
+        </label>
+
+        <label class="switch-row">
+          <input type="checkbox" id="flatToggle" checked>
+          <span class="switch-track"><span class="switch-knob"></span></span>
+          <span class="switch-label">过滤黑屏与纯色帧</span>
+        </label>
+
+        <div class="preset-row">
+          <span class="preset-label">场景预设</span>
+          <button class="chip" data-preset="talk">口播 / 讲课</button>
+          <button class="chip" data-preset="demo">演示 / 操作</button>
+          <button class="chip" data-preset="fast">混剪 / 快切</button>
+        </div>
+
+      </div>
+
+      <aside class="expect">
+        <p class="expect-label">预计产出</p>
+        <p class="expect-num" id="expectNum">—</p>
+        <p class="expect-unit">帧</p>
+        <div class="expect-bar"><span id="expectBar"></span></div>
+        <p class="expect-note" id="expectNote">选好文件后开始估算</p>
+      </aside>
+    </div>
+
+    <div class="action-row">
+      <button class="primary-btn" id="runBtn">
+        <span class="btn-label">开始拆帧</span>
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5h9M8 3.5l4 4-4 4"/></svg>
+      </button>
+      <p class="action-note" id="actionNote">本地解码，文件不会上传</p>
+    </div>
+  </section>
+
+  <!-- 进度 -->
+  <section class="panel progress-panel" id="panelProgress" hidden>
+    <div class="progress-head">
+      <span class="pulse" aria-hidden="true"></span>
+      <h2 id="progressTitle">正在准备</h2>
+      <span class="progress-pct" id="progressPct">0%</span>
+    </div>
+    <div class="progress-track"><span id="progressFill"></span></div>
+    <p class="progress-detail" id="progressDetail">—</p>
+    <details class="log-box" id="logBox">
+      <summary>运行日志</summary>
+      <pre id="logPre"></pre>
+    </details>
+  </section>
+
+  <!-- 3 结果 -->
+  <section class="panel" id="panelResult" hidden>
+    <div class="panel-head">
+      <span class="step-no">03</span>
+      <h2>结果</h2>
+      <span class="panel-hint" id="resultMeta">—</span>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat"><p class="stat-label">候选帧</p><p class="stat-num" id="statCandidates">0</p></div>
+      <div class="stat"><p class="stat-label">去重丢弃</p><p class="stat-num" id="statDup">0</p></div>
+      <div class="stat"><p class="stat-label">黑屏丢弃</p><p class="stat-num" id="statFlat">0</p></div>
+      <div class="stat stat-accent"><p class="stat-label">最终保留</p><p class="stat-num" id="statKept">0</p></div>
+    </div>
+
+    <div class="view-tabs" role="tablist">
+      <button class="tab active" data-view="grid" role="tab">逐帧浏览</button>
+      <button class="tab" data-view="sheet" role="tab">联系表</button>
+    </div>
+
+    <div class="result-body">
+      <div class="view view-grid active" id="viewGrid"></div>
+      <div class="view view-sheet" id="viewSheet"></div>
+    </div>
+
+    <div class="export-row">
+      <button class="primary-btn" id="dlSheetBtn">
+        <span>下载全部联系表</span>
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7.5 2v8M3.5 6.5l4 4 4-4M2.5 12.5h10"/></svg>
+      </button>
+      <button class="ghost-btn" id="dlFrameBtn">下载全部原帧</button>
+      <button class="ghost-btn" id="againBtn">再拆一个</button>
+    </div>
+
+    <p class="next-hint">把联系表发给 AI 助手，就能拿到带时间戳的画面总结。</p>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
