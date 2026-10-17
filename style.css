@@ -875,13 +875,22 @@ input[type="range"]::-moz-range-thumb {
 .key-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
 .key-head label { font-size: 13px; font-weight: 500; }
 
+.key-state {
+  font-size: 11px;
+  color: var(--ok);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+
 .key-link {
+  margin-left: auto;
   font-size: 12px;
   color: var(--text-2);
   text-decoration: none;
