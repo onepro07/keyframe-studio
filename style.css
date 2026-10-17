@@ -65,6 +65,11 @@ html[data-theme="dark"] {
 
 * { box-sizing: border-box; }
 
+/* hidden 属性必须优先于任何 display 声明，
+   否则 .file-card{display:flex} 这类规则会让 [hidden] 失效 */
+[hidden] { display: none !important; }
+
+
 html, body {
   margin: 0;
   padding: 0;

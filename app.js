@@ -68,6 +68,9 @@
     localStorage.setItem('kf-theme', next);
   });
 
+  // 进页面就检测解码能力，让顶栏状态立刻反映真实情况
+  warmupEngine();
+
   /* ---------------- 引擎状态 ---------------- */
 
   function setEngine(stateName, text) {
