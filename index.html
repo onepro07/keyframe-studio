@@ -181,6 +181,68 @@
     <p class="next-hint">把联系表发给 AI 助手，就能拿到带时间戳的画面总结。</p>
   </section>
 
+  <!-- 4 内容总结 -->
+  <section class="panel" id="panelSummary" hidden>
+    <div class="panel-head">
+      <span class="step-no">04</span>
+      <h2>内容总结</h2>
+      <span class="panel-hint">让视觉模型读这些帧</span>
+    </div>
+
+    <div class="key-block">
+      <div class="key-head">
+        <label for="apiKey">智谱 API Key</label>
+        <a class="key-link" href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener">去获取</a>
+      </div>
+      <div class="key-input-row">
+        <input type="password" id="apiKey" placeholder="粘贴 Key，只保存在你的浏览器" autocomplete="off" spellcheck="false">
+        <button class="ghost-btn" id="keyToggle">显示</button>
+      </div>
+      <p class="key-tip">GLM-4V-Flash 免费。Key 存在本机 localStorage，不会上传到任何服务器。</p>
+    </div>
+
+    <details class="adv">
+      <summary>高级设置</summary>
+      <div class="adv-grid">
+        <label class="adv-item">
+          <span>接口地址</span>
+          <input type="text" id="apiEndpoint" value="https://open.bigmodel.cn/api/paas/v4/chat/completions" spellcheck="false">
+        </label>
+        <label class="adv-item">
+          <span>模型</span>
+          <input type="text" id="apiModel" value="glm-4v-flash" spellcheck="false">
+        </label>
+        <label class="adv-item">
+          <span>送入帧数</span>
+          <input type="number" id="apiFrames" value="8" min="2" max="16" step="1">
+        </label>
+      </div>
+    </details>
+
+    <div class="summary-actions">
+      <button class="primary-btn" id="summarizeBtn">
+        <span class="btn-label">生成总结</span>
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5h9M8 3.5l4 4-4 4"/></svg>
+      </button>
+      <button class="ghost-btn" id="stopBtn" hidden>停止</button>
+      <button class="ghost-btn" id="promptBtn">复制提示词</button>
+      <button class="ghost-btn" id="summaryImgsBtn">下载总结用图</button>
+    </div>
+
+    <p class="summary-status" id="summaryStatus">有 Key 就一键生成；没有 Key 也能复制提示词，交给任意 AI。</p>
+
+    <div class="summary-output" id="summaryOutput" hidden>
+      <div class="summary-toolbar">
+        <span class="summary-meta" id="summaryMeta">—</span>
+        <div class="summary-tools">
+          <button class="ghost-btn small" id="copySummaryBtn">复制</button>
+          <button class="ghost-btn small" id="saveSummaryBtn">存为 .md</button>
+        </div>
+      </div>
+      <div class="summary-text" id="summaryText"></div>
+    </div>
+  </section>
+
 </main>
 
 <script src="app.js"></script>
